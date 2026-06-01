@@ -1,0 +1,33 @@
+# Single-host gateway + Postgres. Secrets come from .env (never committed).
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: gateway
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-gateway}
+      POSTGRES_DB: gateway
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gateway"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  gateway:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      CLAUDE_GATEWAY_DB: postgres
+      CLAUDE_GATEWAY_DATABASE_URL: postgresql+asyncpg://gateway:${POSTGRES_PASSWORD:-gateway}@db:5432/gateway
+      CLAUDE_GATEWAY_ADMIN_TOKEN: ${CLAUDE_GATEWAY_ADMIN_TOKEN:?set CLAUDE_GATEWAY_ADMIN_TOKEN in .env}
+      CLAUDE_GATEWAY_SERVER: ${CLAUDE_GATEWAY_SERVER:-fastapi}
+    ports:
+      - "${CLAUDE_GATEWAY_PORT:-8081}:8081"
+    restart: unless-stopped
+
+volumes:
+  pgdata:

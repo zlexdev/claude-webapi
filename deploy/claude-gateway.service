@@ -1,0 +1,26 @@
+# systemd unit for the bare-metal (non-docker) install.
+#   sudo cp deploy/claude-gateway.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now claude-gateway
+# Adjust User and WorkingDirectory to the deploy location.
+[Unit]
+Description=claude-gateway (OpenAI-compatible HTTP gateway over the claude.ai SDK)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=gateway
+WorkingDirectory=/opt/claude_lib
+EnvironmentFile=/opt/claude_lib/.env
+ExecStart=/opt/claude_lib/.venv/bin/python -m gateway
+Restart=always
+RestartSec=3
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/claude_lib
+
+[Install]
+WantedBy=multi-user.target
