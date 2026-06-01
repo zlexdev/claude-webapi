@@ -22,13 +22,28 @@ from gateway.shared.container import AppContainer
 class FakeClient:
     org_uuid = "org-x"
 
+    def __init__(self) -> None:
+        # tool-mode tests set this to a tool-call-shaped reply; default is plain text.
+        self.collect_text = "Hello there"
+        # last value passed via ``tools=`` — lets tests assert Path A pass-through (SC-4).
+        self.recorded_tools: list[Any] = []
+        self.recorded_prompt = ""
+
     async def create_conversation_for_prompt(self, prompt: str) -> Any:
         return SimpleNamespace(uuid="conv-new")
 
-    async def send_message_and_collect(self, conv: str, prompt: str, model: str | None = None) -> CompletionResult:
-        return CompletionResult(text="Hello there", stop_reason="end_turn", output_tokens=7)
+    async def send_message_and_collect(
+        self, conv: str, prompt: str, model: str | None = None, **kwargs: Any
+    ) -> CompletionResult:
+        self.recorded_tools = list(kwargs.get("tools") or [])
+        self.recorded_prompt = prompt
+        return CompletionResult(text=self.collect_text, stop_reason="end_turn", output_tokens=7)
 
-    async def send_message(self, conv: str, prompt: str, model: str | None = None) -> AsyncIterator[Any]:
+    async def send_message(
+        self, conv: str, prompt: str, model: str | None = None, **kwargs: Any
+    ) -> AsyncIterator[Any]:
+        self.recorded_tools = list(kwargs.get("tools") or [])
+        self.recorded_prompt = prompt
         # Match the real client: a coroutine that RETURNS the event iterator.
         async def _gen() -> AsyncIterator[Any]:
             yield ContentBlockDelta(
@@ -70,6 +85,8 @@ class FakeClient:
 class FakeOrch:
     def __init__(self) -> None:
         self.added: list[str] = []
+        # one shared client so tests can configure/inspect it via container.orch.client
+        self.client = FakeClient()
 
     @property
     def bus(self) -> None:
@@ -82,7 +99,7 @@ class FakeOrch:
         self.added.append(getattr(client, "account_id", "x"))
 
     async def get(self, account_id: str) -> FakeClient:
-        return FakeClient()
+        return self.client
 
     async def close(self) -> None:
         return None

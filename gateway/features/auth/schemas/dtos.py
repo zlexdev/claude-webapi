@@ -86,6 +86,19 @@ class CreateAccountRequest(BaseModel):
     tier: str = "free"  # resolved to AccountTier by name in the service
 
 
+class AccountCreated(BaseModel):
+    account_id: str
+
+
+class KeyGenerated(BaseModel):
+    key: str
+    info: KeyInfo
+
+
+class KeyRevoked(BaseModel):
+    revoked: str
+
+
 class RevokeKeyRequest(BaseModel):
     key_id: str
 

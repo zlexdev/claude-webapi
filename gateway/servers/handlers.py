@@ -13,8 +13,11 @@ from collections.abc import AsyncIterator
 
 from gateway.features.auth.errors import AccountForbidden
 from gateway.features.auth.schemas.dtos import (
+    AccountCreated,
     CreateAccountRequest,
     GenerateKeyRequest,
+    KeyGenerated,
+    KeyRevoked,
     RevokeKeyRequest,
 )
 from gateway.features.auth.services.account_service import resolve_tier
@@ -27,13 +30,19 @@ from gateway.features.completion.schemas.openai import (
     ModelCard,
     ModelList,
     Role,
+    ToolDef,
 )
 from gateway.features.completion.sse import DONE, sse_line
 from gateway.features.methods.schemas.dtos import MethodInvokeRequest, MethodInvokeResult
 from gateway.shared.container import AppContainer
+from gateway.shared.errors import error_sse_frame
+from gateway.shared.logging import get_logger
 from gateway.shared.principal import Principal
+from gateway.shared.schemas.health import HealthResponse
 from gateway.shared.schemas.pagination import PageParams
 from gateway.servers.context import JsonResult, RequestContext, StreamResult
+
+log = get_logger("handlers")
 
 
 def _limit(ctx: RequestContext, default: int = 50) -> int:
@@ -60,6 +69,8 @@ class GatewayHandlers:
             model_alias=req.model,
             conversation_id=conv_id,
             stream=req.stream,
+            tools=req.tools,
+            tool_choice=req.tool_choice,
         )
         if req.stream:
             return StreamResult(self._completion_sse(self._c.completion.stream(inp, principal)))
@@ -99,11 +110,14 @@ class GatewayHandlers:
     async def chat_send(self, ctx: RequestContext) -> JsonResult | StreamResult:
         principal = ctx.need_principal()
         req = SendToChatRequest.model_validate(ctx.json_body)
+        tools = [ToolDef.model_validate(t) for t in req.tools] if req.tools else None
         inp = CompletionInput(
             messages=[InMessage(role=Role.USER, content=req.text)],
             model_alias=req.model or self._c.settings.default_model,
             conversation_id=ctx.path_params["id"],
             stream=req.stream,
+            tools=tools,
+            tool_choice=req.tool_choice,
         )
         if req.stream:
             return StreamResult(self._completion_sse(self._c.completion.stream(inp, principal)))
@@ -129,7 +143,7 @@ class GatewayHandlers:
         account = await self._c.account_service.provision(
             req.cookies, org_uuid=req.org_uuid, name=req.name, tier=resolve_tier(req.tier)
         )
-        return JsonResult(200, {"account_id": account.account_id})
+        return JsonResult(200, AccountCreated(account_id=account.account_id))
 
     async def system_account_list(self, ctx: RequestContext) -> JsonResult:
         page = await self._c.account_service.page(
@@ -140,7 +154,7 @@ class GatewayHandlers:
     async def system_key_generate(self, ctx: RequestContext) -> JsonResult:
         req = GenerateKeyRequest.model_validate(ctx.json_body)
         info, raw = await self._c.apikey_service.generate(req)
-        return JsonResult(200, {"key": raw, "info": info.model_dump(mode="json")})
+        return JsonResult(200, KeyGenerated(key=raw, info=info))
 
     async def system_key_list(self, ctx: RequestContext) -> JsonResult:
         page = await self._c.apikey_service.page(
@@ -153,10 +167,10 @@ class GatewayHandlers:
     async def system_key_revoke(self, ctx: RequestContext) -> JsonResult:
         req = RevokeKeyRequest.model_validate(ctx.json_body)
         await self._c.apikey_service.revoke(req.key_id)
-        return JsonResult(200, {"revoked": req.key_id})
+        return JsonResult(200, KeyRevoked(revoked=req.key_id))
 
     async def health(self, ctx: RequestContext) -> JsonResult:
-        return JsonResult(200, {"status": "ok", "server": self._c.settings.server})
+        return JsonResult(200, HealthResponse(status="ok", server=self._c.settings.server))
 
     def _resolve_account(self, account_id: str | None, principal: Principal) -> str:
         if account_id and account_id != principal.account_id and not principal.is_admin:
@@ -166,13 +180,21 @@ class GatewayHandlers:
     async def _completion_sse(
         self, chunks: AsyncIterator[ChatCompletionChunk]
     ) -> AsyncIterator[str]:
-        async for chunk in chunks:
-            yield sse_line(chunk)
+        try:
+            async for chunk in chunks:
+                yield sse_line(chunk)
+        except Exception as exc:  # noqa: BLE001 — boundary: body already flushed, surface error in-band
+            log.exception("completion stream failed mid-flight")
+            yield error_sse_frame(exc)
         yield DONE
 
     async def _methods_sse(
         self, method: str, account_id: str, params: dict[str, object]
     ) -> AsyncIterator[str]:
-        async for event in self._c.dispatch.invoke_stream(method, account_id, params):
-            yield f"data: {json.dumps(event)}\n\n"
+        try:
+            async for event in self._c.dispatch.invoke_stream(method, account_id, params):
+                yield f"data: {json.dumps(event)}\n\n"
+        except Exception as exc:  # noqa: BLE001 — boundary: body already flushed, surface error in-band
+            log.exception("method stream failed mid-flight")
+            yield error_sse_frame(exc)
         yield DONE

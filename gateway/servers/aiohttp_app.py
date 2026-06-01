@@ -6,6 +6,7 @@ from typing import Any
 
 from gateway.servers.dispatch import lower_headers, run_route
 from gateway.servers.handlers import GatewayHandlers
+from gateway.servers.openapi import build_openapi, scalar_html
 from gateway.servers.routes import ROUTES
 from gateway.shared.container import AppContainer
 
@@ -14,6 +15,14 @@ def create_aiohttp_app(container: AppContainer) -> Any:
     from aiohttp import web
 
     handlers = GatewayHandlers(container)
+    spec = build_openapi(ROUTES)
+    reference_html = scalar_html("/openapi.json")
+
+    async def openapi_json(_request: Any) -> Any:
+        return web.json_response(spec)
+
+    async def scalar_reference(_request: Any) -> Any:
+        return web.Response(text=reference_html, content_type="text/html")
 
     async def _on_startup(_app: Any) -> None:
         await container.open()
@@ -57,4 +66,7 @@ def create_aiohttp_app(container: AppContainer) -> Any:
 
     for route in ROUTES:
         app.router.add_route(route.http, route.path, make(route))
+    app.router.add_get("/openapi.json", openapi_json)
+    for docs_path in ("/docs", "/scalar"):
+        app.router.add_get(docs_path, scalar_reference)
     return app

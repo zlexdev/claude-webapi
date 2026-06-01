@@ -1,6 +1,6 @@
 """Introspect SDK method classes into MethodSpec + locate their param shape.
 
-Two coexisting styles:
+Two coexisting styles (see ``claude_ai/methods/_MODULE.md``):
 - field-based ``RequestMethod`` (a pydantic ``BaseModel``) — params are the model's fields;
 - legacy ``BaseMethod`` + a sibling ``<Name>Params`` dataclass.
 
@@ -79,7 +79,12 @@ def discover() -> dict[str, Entry]:
                 continue
             if obj in (BaseMethod, RequestMethod):
                 continue
-            params_cls = getattr(module, f"{attr}Params", None)
+            # The `<Name>Params` dataclass lives in the method's own module, and is not
+            # always re-exported in the subpackage `__init__`. Resolve it from the defining
+            # module so legacy methods aren't misclassified as param-less (would 422, then
+            # crash once dispatched). Genuinely param-less methods (GetProfile) stay None.
+            own_module = importlib.import_module(obj.__module__)
+            params_cls = getattr(own_module, f"{obj.__name__}Params", None)
             entries[obj.__name__] = (extract_spec(obj, group, params_cls), obj, params_cls)
     return entries
 

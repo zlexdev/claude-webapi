@@ -7,6 +7,7 @@ catch-all. The dict shape is ``{"error": {"message", "type", "code"}}``.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import Any
 
@@ -59,6 +60,16 @@ def map_exception(exc: BaseException) -> ErrorResponse:
 
     log.exception("unhandled error mapped to 500")
     return ErrorResponse(500, _envelope("Internal server error", "server_error", None))
+
+
+def error_sse_frame(exc: BaseException) -> str:
+    """Format any exception as an OpenAI-shaped SSE error frame.
+
+    Used when a stream fails *after* headers/200 were already flushed (e.g. a 429 or
+    ``RemoteProtocolError`` surfacing inside the SSE body): the HTTP envelope can no
+    longer carry the error, so the client must learn about it from an in-band frame.
+    """
+    return f"data: {json.dumps(map_exception(exc).payload)}\n\n"
 
 
 def _first_validation_message(exc: ValidationError) -> str:

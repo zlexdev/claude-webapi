@@ -55,7 +55,11 @@ class MethodRegistry:
                 raise MethodParamsInvalid(f"{name}: {exc}") from exc
 
         if params_cls is None:
-            raise MethodParamsInvalid(f"{name} has no Params class")
+            # Param-less legacy method (``BaseMethod[None, R]``, e.g. GetProfile): it takes
+            # ``params=None``, so call it with no params rather than rejecting the invoke.
+            if supplied:
+                raise MethodParamsInvalid(f"{name} takes no parameters")
+            return method_cls(), None
         if org_uuid and legacy_has_field(params_cls, "org_uuid") and "org_uuid" not in supplied:
             supplied["org_uuid"] = org_uuid
         try:

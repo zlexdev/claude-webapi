@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from pydantic import BaseModel
 
 
@@ -30,3 +32,7 @@ class SendToChatRequest(BaseModel):
     text: str
     model: str | None = None
     stream: bool = False
+    # raw OpenAI tool shapes — validated into completion's ToolDef in the handler
+    # (keeps the chats feature decoupled from completion). tool_choice passthrough.
+    tools: list[dict[str, Any]] | None = None
+    tool_choice: str | dict[str, Any] | None = None

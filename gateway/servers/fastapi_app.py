@@ -11,6 +11,7 @@ from typing import Any
 
 from gateway.servers.dispatch import lower_headers, run_route
 from gateway.servers.handlers import GatewayHandlers
+from gateway.servers.openapi import build_openapi, scalar_html
 from gateway.servers.routes import ROUTES
 from gateway.shared.container import AppContainer
 
@@ -24,14 +25,7 @@ def create_fastapi_app(container: AppContainer) -> Any:
     handlers = GatewayHandlers(container)
 
     # Scalar replaces Swagger UI as the API reference (served over /openapi.json).
-    scalar_html = (
-        "<!doctype html><html><head><title>claude-gateway API</title>"
-        '<meta charset="utf-8"/>'
-        '<meta name="viewport" content="width=device-width, initial-scale=1"/></head>'
-        '<body><script id="api-reference" data-url="/openapi.json"></script>'
-        '<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>'
-        "</body></html>"
-    )
+    reference_html = scalar_html("/openapi.json")
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -43,8 +37,17 @@ def create_fastapi_app(container: AppContainer) -> Any:
 
     app = FastAPI(title="claude-gateway", lifespan=lifespan, docs_url=None, redoc_url=None)
 
+    def custom_openapi() -> dict[str, Any]:
+        schema = app.openapi_schema
+        if schema is None:
+            schema = build_openapi(ROUTES)
+            app.openapi_schema = schema
+        return schema
+
+    app.openapi = custom_openapi  # type: ignore[method-assign] — replace empty auto-spec
+
     async def scalar_reference(_request: Request) -> Any:
-        return HTMLResponse(scalar_html)
+        return HTMLResponse(reference_html)
 
     for docs_path in ("/docs", "/scalar"):
         app.add_api_route(docs_path, scalar_reference, methods=["GET"], include_in_schema=False)
