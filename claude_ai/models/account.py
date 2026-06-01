@@ -21,3 +21,7 @@ class Feature(ClaudeObject):
 
 class AccessInfo(ClaudeObject):
     features: list[Feature] = []
+
+
+class RavenEligibility(ClaudeObject):
+    eligible: bool = False

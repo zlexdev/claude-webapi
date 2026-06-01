@@ -1,19 +1,16 @@
-"""GetExperiences: web-experience (in-app placement / nudge) config for an org.
-
-The experiences payload is an A/B placement tree that changes constantly —
-returned raw as ``dict``.
-"""
+"""GetExperiences: web-experience (in-app placement / nudge) config for an org."""
 
 from typing import Any
 
 from claude_ai.enums.auth import Locale
 from claude_ai.methods.base import RequestMethod
+from claude_ai.models.organization import Experiences
 
 
-class GetExperiences(RequestMethod[dict[str, Any]]):
+class GetExperiences(RequestMethod[Experiences]):
     __endpoint__ = "/api/organizations/{org_uuid}/experiences/claude_web"
     __http_method__ = "GET"
-    __model__ = dict
+    __model__ = Experiences
 
     org_uuid: str
     locale: Locale = Locale.EN_US

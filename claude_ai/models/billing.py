@@ -51,3 +51,32 @@ class PausedSubscription(ClaudeObject):
     price: int | None = None
     payment_paused_until: str | None = None
     manual_pause_scheduled_at: str | None = None
+
+
+class ProductPrice(ClaudeObject):
+    """One plan's price line (amounts are integer minor units / cents)."""
+
+    basePrice: int
+    totalPrice: int
+    subtotalPrice: int | None = None
+    proratedRefund: int | None = None
+    taxAmount: int | None = None
+    undiscountedPrice: int | None = None
+    stripeBalanceApplied: int | None = None
+    offer: Any | None = None
+    offerDetails: Any | None = None
+
+
+class PlanPricing(ClaudeObject):
+    """individual_plan_pricing/v2 — per-plan price matrix keyed by plan id."""
+
+    country: str | None = None
+    currency: str | None = None
+    product_prices_due_today: dict[str, ProductPrice] = {}
+    product_prices_per_billing_period: dict[str, ProductPrice] = {}
+    proration_timestamp: int | None = None
+    taxDisplay: TaxDisplay | None = None
+    presentment_currency: str | None = None
+    presentment_amount_minor: int | None = None
+    settlement_currency: str | None = None
+    settlement_amount_minor: int | None = None

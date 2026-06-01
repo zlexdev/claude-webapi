@@ -1,6 +1,11 @@
 """Pydantic models for API responses."""
 
-from claude_ai.models.account import AccessInfo, AccountProfile, Feature
+from claude_ai.models.account import (
+    AccessInfo,
+    AccountProfile,
+    Feature,
+    RavenEligibility,
+)
 from claude_ai.models.auth import (
     AuthResult,
     FallbackCodeConfig,
@@ -11,6 +16,8 @@ from claude_ai.models.billing import (
     ConsumerPricing,
     Eligibility,
     PausedSubscription,
+    PlanPricing,
+    ProductPrice,
     StripeIntent,
     StripeRegion,
     TaxDisplay,
@@ -35,11 +42,18 @@ from claude_ai.models.conversation import (
 )
 from claude_ai.models.organization import (
     Credits,
+    Experience,
+    ExperienceRules,
+    Experiences,
+    FeaturePreference,
     Memory,
     ModelConfig,
+    NotificationPreferences,
     Organization,
     OrgSettings,
     PaymentMethod,
+    PushReachability,
+    RateLimit,
     Style,
     SubscriptionDetails,
 )
@@ -83,6 +97,16 @@ __all__ = [
     "AccountProfile",
     "Feature",
     "AccessInfo",
+    "RavenEligibility",
+    "PlanPricing",
+    "ProductPrice",
+    "NotificationPreferences",
+    "FeaturePreference",
+    "PushReachability",
+    "Experiences",
+    "Experience",
+    "ExperienceRules",
+    "RateLimit",
     "LoginMethods",
     "FallbackCodeConfig",
     "MagicLinkResult",

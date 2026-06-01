@@ -53,3 +53,12 @@ def test_models_get_is_auth_gated_not_validation_422() -> None:
         r = client.get("/v1/models")
         assert r.status_code == 401, r.text
         assert r.status_code != 422
+
+
+def test_docs_serve_scalar_not_swagger() -> None:
+    with _client() as client:
+        r = client.get("/docs")
+        assert r.status_code == 200, r.text
+        assert "@scalar/api-reference" in r.text
+        assert "swagger-ui" not in r.text.lower()
+        assert client.get("/openapi.json").status_code == 200

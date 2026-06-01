@@ -1,18 +1,15 @@
-"""GetPlanPricing: per-product pricing breakdown (Pro / Max 5x / Max 20x), v2.
-
-Response is a deeply-nested per-product / per-period price matrix that mutates
-with promos and proration — returned raw as ``dict`` rather than over-modeled.
-"""
+"""GetPlanPricing: per-product pricing breakdown (Pro / Max 5x / Max 20x), v2."""
 
 from typing import Any
 
 from claude_ai.methods.base import RequestMethod
+from claude_ai.models.billing import PlanPricing
 
 
-class GetPlanPricing(RequestMethod[dict[str, Any]]):
+class GetPlanPricing(RequestMethod[PlanPricing]):
     __endpoint__ = "/api/billing/{org_uuid}/individual_plan_pricing/v2"
     __http_method__ = "POST"
-    __model__ = dict
+    __model__ = PlanPricing
 
     org_uuid: str
     country: str

@@ -1,6 +1,9 @@
 """Organization, subscription, credits, model-config models."""
 
+from datetime import datetime
 from typing import Any
+
+from pydantic import Field
 
 from claude_ai.models._object import ClaudeObject
 
@@ -79,3 +82,59 @@ class Style(ClaudeObject):
 
 class Memory(ClaudeObject):
     memories: list[dict[str, Any]] = []
+
+
+class FeaturePreference(ClaudeObject):
+    enable_email: bool | None = None
+    enable_push: bool | None = None
+
+
+class PushReachability(ClaudeObject):
+    has_active_channel: bool = False
+    platforms: list[Any] = []  # element shape unobserved (empty live)
+    most_recent_token_refresh: str | None = None
+
+
+class NotificationPreferenceSet(ClaudeObject):
+    # one entry per Claude feature (assist, compass, completion, dispatch, marketing, …)
+    feature_preference: dict[str, FeaturePreference] = {}
+
+
+class NotificationPreferences(ClaudeObject):
+    account_id: int
+    organization_id: int
+    preferences: NotificationPreferenceSet = NotificationPreferenceSet()
+    push_reachability: PushReachability = PushReachability()
+
+
+class Experience(ClaudeObject):
+    id: str
+    key: str
+    placement_key: str
+    variant_key: str
+    exp_id: str
+    enabled: bool = False
+    template_key: str | None = None
+    content: dict[str, Any] = {}  # variant-defined payload
+    config: dict[str, Any] = {}
+
+
+class RateLimit(ClaudeObject):
+    remaining: int = 0
+    reset_at: datetime | None = None
+
+
+class GlobalRules(ClaudeObject):
+    rate_limit: RateLimit | None = None
+    cooldown: Any | None = None
+
+
+class ExperienceRules(ClaudeObject):
+    global_: GlobalRules | None = Field(default=None, alias="global")
+    placements: dict[str, Any] = {}
+    tiers: dict[str, Any] = {}
+
+
+class Experiences(ClaudeObject):
+    experiences: list[Experience] = []
+    rules: ExperienceRules | None = None

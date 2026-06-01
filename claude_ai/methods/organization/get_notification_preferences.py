@@ -1,18 +1,15 @@
-"""GetNotificationPreferences: per-feature email/push notification matrix.
-
-The preference matrix nests one entry per Claude feature (assist, compass,
-completion, dispatch, marketing, ...) — returned raw as ``dict``.
-"""
+"""GetNotificationPreferences: per-feature email/push notification matrix."""
 
 from typing import Any
 
 from claude_ai.methods.base import RequestMethod
+from claude_ai.models.organization import NotificationPreferences
 
 
-class GetNotificationPreferences(RequestMethod[dict[str, Any]]):
+class GetNotificationPreferences(RequestMethod[NotificationPreferences]):
     __endpoint__ = "/api/organizations/{org_uuid}/notification/preferences"
     __http_method__ = "GET"
-    __model__ = dict
+    __model__ = NotificationPreferences
 
     org_uuid: str
 

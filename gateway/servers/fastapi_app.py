@@ -19,9 +19,19 @@ def create_fastapi_app(container: AppContainer) -> Any:
     from contextlib import asynccontextmanager
 
     from fastapi import FastAPI, Request
-    from fastapi.responses import JSONResponse, StreamingResponse
+    from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 
     handlers = GatewayHandlers(container)
+
+    # Scalar replaces Swagger UI as the API reference (served over /openapi.json).
+    scalar_html = (
+        "<!doctype html><html><head><title>claude-gateway API</title>"
+        '<meta charset="utf-8"/>'
+        '<meta name="viewport" content="width=device-width, initial-scale=1"/></head>'
+        '<body><script id="api-reference" data-url="/openapi.json"></script>'
+        '<script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>'
+        "</body></html>"
+    )
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
@@ -31,7 +41,13 @@ def create_fastapi_app(container: AppContainer) -> Any:
         finally:
             await container.close()
 
-    app = FastAPI(title="claude-gateway", lifespan=lifespan)
+    app = FastAPI(title="claude-gateway", lifespan=lifespan, docs_url=None, redoc_url=None)
+
+    async def scalar_reference(_request: Request) -> Any:
+        return HTMLResponse(scalar_html)
+
+    for docs_path in ("/docs", "/scalar"):
+        app.add_api_route(docs_path, scalar_reference, methods=["GET"], include_in_schema=False)
 
     def register(route: Any) -> None:
         async def endpoint(request: Request) -> Any:

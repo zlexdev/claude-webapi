@@ -10,6 +10,7 @@ re-managing them.
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+from enum import Enum
 from typing import Any
 
 import aiohttp
@@ -83,7 +84,7 @@ class AiohttpTransport(BaseTransport):
         if proxy is not None:
             kwargs["proxy"] = proxy.url
         if request.params:
-            kwargs["params"] = {k: v for k, v in request.params.items() if v is not None}
+            kwargs["params"] = _coerce_query(request.params)
         if request.files is not None:
             form = aiohttp.FormData()
             for name, (filename, content, content_type) in request.files.items():
@@ -150,6 +151,24 @@ class AiohttpTransport(BaseTransport):
         if self._session is not None and not self._session.closed:
             await self._session.close()
             self._session = None
+
+
+def _coerce_query(params: dict[str, Any]) -> dict[str, str | int | float]:
+    # aiohttp/yarl only accept str|int|float query values (httpx also took bool/enum).
+    # Match httpx: bool -> "true"/"false", Enum -> its value, drop None.
+    out: dict[str, str | int | float] = {}
+    for key, value in params.items():
+        if value is None:
+            continue
+        if isinstance(value, Enum):
+            value = value.value
+        if isinstance(value, bool):
+            out[key] = "true" if value else "false"
+        elif isinstance(value, (int, float, str)):
+            out[key] = value
+        else:
+            out[key] = str(value)
+    return out
 
 
 def _safe_json(content: bytes) -> Any:
