@@ -29,18 +29,22 @@ class FakeClient:
         return CompletionResult(text="Hello there", stop_reason="end_turn", output_tokens=7)
 
     async def send_message(self, conv: str, prompt: str, model: str | None = None) -> AsyncIterator[Any]:
-        yield ContentBlockDelta(
-            type="content_block_delta", raw={}, index=0, delta={"type": "text_delta", "text": "Hello"}
-        )
-        yield ContentBlockDelta(
-            type="content_block_delta", raw={}, index=0, delta={"type": "text_delta", "text": " there"}
-        )
-        yield MessageDelta(
-            type="message_delta",
-            raw={},
-            delta=StopDelta(stop_reason="end_turn", stop_sequence=None),
-            usage=UsageInfo(output_tokens=7),
-        )
+        # Match the real client: a coroutine that RETURNS the event iterator.
+        async def _gen() -> AsyncIterator[Any]:
+            yield ContentBlockDelta(
+                type="content_block_delta", raw={}, index=0, delta={"type": "text_delta", "text": "Hello"}
+            )
+            yield ContentBlockDelta(
+                type="content_block_delta", raw={}, index=0, delta={"type": "text_delta", "text": " there"}
+            )
+            yield MessageDelta(
+                type="message_delta",
+                raw={},
+                delta=StopDelta(stop_reason="end_turn", stop_sequence=None),
+                usage=UsageInfo(output_tokens=7),
+            )
+
+        return _gen()
 
     async def list_conversations(self, limit: int = 50) -> Any:
         return SimpleNamespace(

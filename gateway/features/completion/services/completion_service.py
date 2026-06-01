@@ -79,7 +79,9 @@ class CompletionService(BaseService):
         created = now_epoch()
         yield make_chunk(id_=cid, created=created, model=req.model_alias, delta={"role": "assistant"})
         finish: str | None = None
-        async for event in client.send_message(conv_uuid, prompt, model=model):
+        # send_message is a coroutine returning the event iterator — await before async-for.
+        stream = await client.send_message(conv_uuid, prompt, model=model)
+        async for event in stream:
             piece = text_of_event(event)
             if piece:
                 yield make_chunk(
