@@ -17,6 +17,9 @@ class Account(BaseModel):
     name: str | None = None
     tier: AccountTier = AccountTier.FREE
     cookies: dict[str, str] = Field(default_factory=dict)
+    # Per-account UA: cf_clearance is bound to (egress IP, User-Agent), so each jar must
+    # be replayed under the exact UA it was harvested with. None → SDK process default.
+    user_agent: str | None = None
     revoked: bool = False
     created_at: datetime
     updated_at: datetime
@@ -64,6 +67,7 @@ class AccountInfo(BaseModel):
     org_uuid: str | None = None
     name: str | None = None
     tier: AccountTier = AccountTier.FREE
+    user_agent: str | None = None
     revoked: bool = False
     created_at: datetime
 
@@ -74,6 +78,7 @@ class AccountInfo(BaseModel):
             org_uuid=account.org_uuid,
             name=account.name,
             tier=account.tier,
+            user_agent=account.user_agent,
             revoked=account.revoked,
             created_at=account.created_at,
         )
@@ -84,6 +89,14 @@ class CreateAccountRequest(BaseModel):
     org_uuid: str | None = None
     name: str | None = None
     tier: str = "free"  # resolved to AccountTier by name in the service
+    user_agent: str | None = None  # UA the cookie jar was harvested under
+
+
+class UpdateAccountCookiesRequest(BaseModel):
+    """Refresh a live account's CF session (cookies + optionally the matching UA)."""
+
+    cookies: CookiesInput
+    user_agent: str | None = None  # omit to keep the stored UA
 
 
 class AccountCreated(BaseModel):
@@ -110,3 +123,4 @@ class GenerateKeyRequest(BaseModel):
     name: str | None = None
     scope: KeyScope = KeyScope.ACCOUNT
     tier: str = "free"
+    user_agent: str | None = None  # UA the cookie jar was harvested under

@@ -153,6 +153,42 @@ async def test_admin_listings(container: AppContainer, handlers: GatewayHandlers
     assert keys["data"] and "key_hash" not in keys["data"][0]
 
 
+async def test_account_update_cookies_refreshes_client(
+    container: AppContainer, handlers: GatewayHandlers
+) -> None:
+    raw = await _new_key(handlers)
+    principal = await container.authenticate(f"Bearer {raw}")
+    acc_id = principal.account_id
+    orch: Any = container.orch
+
+    result = await handlers.system_account_update(
+        RequestContext(
+            path_params={"id": acc_id},
+            json_body={"cookies": {"sessionKey": "fresh", "cf_clearance": "cf2"}, "user_agent": "UA/2"},
+        )
+    )
+    assert isinstance(result, JsonResult)
+    info = body(result)
+    assert info["account_id"] == acc_id and info["user_agent"] == "UA/2"
+    assert "cookies" not in info  # AccountInfo never leaks the jar
+
+    stored = await container.accounts.get(acc_id)
+    assert stored is not None
+    assert stored.cookies == {"sessionKey": "fresh", "cf_clearance": "cf2"}
+    assert stored.user_agent == "UA/2"
+    # pooled client was torn down and rebuilt with the fresh jar
+    assert acc_id in orch.removed and orch.added.count(acc_id) == 2
+
+
+async def test_account_update_cookies_unknown_account(handlers: GatewayHandlers) -> None:
+    from gateway.features.auth.errors import AccountNotFound
+
+    with pytest.raises(AccountNotFound):
+        await handlers.system_account_update(
+            RequestContext(path_params={"id": "acc_missing"}, json_body={"cookies": {"sessionKey": "x"}})
+        )
+
+
 async def test_admin_token_verification(container: AppContainer) -> None:
     from gateway.features.auth.errors import AdminForbidden
 

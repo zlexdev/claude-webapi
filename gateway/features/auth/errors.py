@@ -47,6 +47,12 @@ class CookieParseError(GatewayError):
     message = "Could not parse cookies"
 
 
+class CookieDecryptError(GatewayError):
+    status_code = 500
+    error_type = "api_error"
+    message = "Could not decrypt stored cookies"
+
+
 class KeyTargetRequired(GatewayError):
     status_code = 400
     error_type = "invalid_request_error"

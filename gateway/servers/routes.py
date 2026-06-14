@@ -18,6 +18,7 @@ from gateway.features.auth.schemas.dtos import (
     KeyInfo,
     KeyRevoked,
     RevokeKeyRequest,
+    UpdateAccountCookiesRequest,
 )
 from gateway.features.chats.schemas.dtos import (
     ChatSummary,
@@ -103,6 +104,11 @@ ROUTES: list[RouteDef] = [
     RouteDef(
         "GET", "/system/accounts/list", "system_account_list", RouteAuth.ADMIN,
         response_model=Page[AccountInfo], query=_PAGE, summary="List accounts.",
+    ),
+    RouteDef(
+        "PATCH", "/system/accounts/{id}/cookies", "system_account_update", RouteAuth.ADMIN,
+        request_model=UpdateAccountCookiesRequest, response_model=AccountInfo,
+        summary="Refresh a live account's cookies (and optionally its User-Agent).",
     ),
     RouteDef(
         "POST", "/system/keys/generate", "system_key_generate", RouteAuth.ADMIN,

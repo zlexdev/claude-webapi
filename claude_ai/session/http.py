@@ -54,6 +54,7 @@ class HttpSession(BaseSession):
         cookie_storage: BaseCookieStorage | None = None,
         transport: BaseTransport | None = None,
         settings: ClaudeAISettings | None = None,
+        user_agent: str | None = None,
         middlewares: list[Middleware[TransportRequest, TransportResponse]]
         | None = None,
         stream_middlewares: list[Middleware[StreamEvent, None]] | None = None,
@@ -61,6 +62,10 @@ class HttpSession(BaseSession):
     ) -> None:
         self.account_id = account_id
         self._settings = settings or ClaudeAISettings()
+        # Per-session override of the process-global settings.user_agent. cf_clearance
+        # is bound to (egress IP, UA), so a pooled multi-account setup needs each jar
+        # replayed under the UA it was minted with — not one UA for the whole process.
+        self._user_agent = user_agent
         self._cookie_storage = cookie_storage or MemoryCookieStorage()
         self._initial_cookies = dict(cookies or {})
         self._cookies: dict[str, str] = {}
@@ -145,7 +150,7 @@ class HttpSession(BaseSession):
         mr = method.build_request(self._settings.base_url, params)
         headers = dict(mr.headers)
         headers.update(build_auth_headers(self._cookies))
-        headers.setdefault("user-agent", self._settings.user_agent)
+        headers.setdefault("user-agent", self._user_agent or self._settings.user_agent)
         if stream:
             headers["accept"] = "text/event-stream"
         return TransportRequest(

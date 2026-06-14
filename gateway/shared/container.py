@@ -31,6 +31,7 @@ from gateway.shared.logging import configure_logging, get_logger
 from gateway.shared.rate_limit import KeyedRateLimiter
 
 if TYPE_CHECKING:
+    from gateway.features.auth.cipher import CookieCipher
     from gateway.shared.db.engine import Database
 
 log = get_logger("container")
@@ -73,8 +74,17 @@ class AppContainer:
 
         assert self.settings.database_url is not None  # guaranteed by settings validator
         self._db = Database(self.settings.database_url)
-        self.accounts = PostgresAccountStore(self._db)
+        self.accounts = PostgresAccountStore(self._db, cipher=self._build_cipher())
         self.keys = PostgresApiKeyStore(self._db)
+
+    def _build_cipher(self) -> CookieCipher | None:
+        """Fernet cookie cipher when a key is set; None leaves cookies plaintext at rest."""
+        key = self.settings.cookie_encryption_key
+        if not key:
+            return None
+        from gateway.features.auth.cipher import CookieCipher
+
+        return CookieCipher(key)
 
     def schedule(self, coro: Coroutine[Any, Any, Any]) -> None:
         """Run a fire-and-forget coroutine, keeping a ref so it isn't GC'd."""

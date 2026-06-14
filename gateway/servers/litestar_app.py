@@ -43,7 +43,7 @@ def create_litestar_app(container: AppContainer) -> Any:
     def make(route: Any) -> Any:
         async def fn(request: Request) -> Any:
             json_body: dict[str, Any] = {}
-            if route.http == "POST":
+            if route.http in ("POST", "PATCH", "PUT"):
                 try:
                     json_body = await request.json()
                 except Exception:  # noqa: BLE001 - empty/invalid body becomes {}

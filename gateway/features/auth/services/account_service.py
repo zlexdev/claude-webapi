@@ -41,7 +41,10 @@ class AccountService(BaseService):
 
     def _build_client(self, account: Account) -> ClaudeAIClient:
         session = HttpSession(
-            account.account_id, cookies=account.cookies, bus=self._orch.bus
+            account.account_id,
+            cookies=account.cookies,
+            user_agent=account.user_agent,
+            bus=self._orch.bus,
         )
         return ClaudeAIClient(
             account.account_id,
@@ -57,6 +60,7 @@ class AccountService(BaseService):
         org_uuid: str | None,
         name: str | None,
         tier: AccountTier,
+        user_agent: str | None = None,
     ) -> Account:
         parsed = parse_cookies(cookies)
         now = datetime.now(UTC)
@@ -66,6 +70,7 @@ class AccountService(BaseService):
             name=name,
             tier=tier,
             cookies=parsed,
+            user_agent=user_agent,
             created_at=now,
             updated_at=now,
         )
@@ -73,6 +78,34 @@ class AccountService(BaseService):
         await self._orch.add(self._build_client(account), tier=tier)
         log.info("account provisioned", extra={"account_id": account.account_id})
         return account
+
+    async def update_cookies(
+        self,
+        account_id: str,
+        cookies: CookiesInput,
+        *,
+        user_agent: str | None = None,
+    ) -> Account:
+        """Refresh a (live) account's CF session and rebuild its pooled client.
+
+        cf_clearance / __cf_bm expire in hours; this is the re-provision-free path.
+        ``user_agent=None`` keeps the stored UA. A revoked account is updated at rest
+        but not re-added to the pool (it was never in it).
+        """
+        account = await self.get(account_id)  # raises AccountNotFound
+        updated = account.model_copy(
+            update={
+                "cookies": parse_cookies(cookies),
+                "user_agent": user_agent if user_agent is not None else account.user_agent,
+                "updated_at": datetime.now(UTC),
+            }
+        )
+        await self._accounts.upsert(updated)
+        if not updated.revoked:
+            await self._orch.remove(account_id)  # closes the stale-cookie client
+            await self._orch.add(self._build_client(updated), tier=updated.tier)
+        log.info("account cookies refreshed", extra={"account_id": account_id})
+        return updated
 
     async def rehydrate_all(self) -> int:
         count = 0
