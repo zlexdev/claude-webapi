@@ -1,8 +1,10 @@
-"""Memory auth-store tests — keyset cursor pagination parity + lifecycle."""
+"""Memory auth-store tests — keyset cursor pagination parity + lifecycle + cookie cipher."""
 
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+
+import pytest
 
 from gateway.features.auth.schemas.dtos import Account, ApiKey
 from gateway.shared.principal import KeyScope
@@ -14,6 +16,52 @@ BASE = datetime(2026, 1, 1, tzinfo=UTC)
 def _account(i: int) -> Account:
     when = BASE + timedelta(minutes=i)
     return Account(account_id=f"acc{i}", cookies={"k": str(i)}, created_at=when, updated_at=when)
+
+
+def test_cookie_cipher_round_trip() -> None:
+    pytest.importorskip("cryptography")
+    from cryptography.fernet import Fernet
+
+    from gateway.features.auth.cipher import CookieCipher
+
+    cipher = CookieCipher(Fernet.generate_key().decode())
+    jar = {"sessionKey": "sk-ant-sid01-x", "cf_clearance": "cf"}
+    token = cipher.encrypt(jar)
+    assert isinstance(token, str) and "sessionKey" not in token  # opaque ciphertext
+    assert cipher.decrypt(token) == jar
+
+
+def test_cookie_cipher_wrong_key_raises() -> None:
+    pytest.importorskip("cryptography")
+    from cryptography.fernet import Fernet
+
+    from gateway.features.auth.cipher import CookieCipher
+    from gateway.features.auth.errors import CookieDecryptError
+
+    token = CookieCipher(Fernet.generate_key().decode()).encrypt({"a": "b"})
+    with pytest.raises(CookieDecryptError):
+        CookieCipher(Fernet.generate_key().decode()).decrypt(token)
+
+
+def test_per_account_user_agent_flows_into_session_headers() -> None:
+    from claude_ai.methods.account.get_profile import GetProfile
+    from claude_ai.session import HttpSession
+
+    account = Account(
+        account_id="acc_ua",
+        cookies={"sessionKey": "s"},
+        user_agent="Custom-UA/9",
+        created_at=BASE,
+        updated_at=BASE,
+    )
+    session = HttpSession(account.account_id, cookies=account.cookies, user_agent=account.user_agent)
+    req = session._build_transport_request(GetProfile(), None)
+    assert req.headers["user-agent"] == "Custom-UA/9"
+
+    # No per-account UA → process-global default applies.
+    default_session = HttpSession(account.account_id, cookies=account.cookies)
+    default_req = default_session._build_transport_request(GetProfile(), None)
+    assert default_req.headers["user-agent"] == default_session.settings.user_agent
 
 
 async def test_account_keyset_pagination() -> None:

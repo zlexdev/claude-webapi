@@ -70,6 +70,7 @@ class FakeClient:
 class FakeOrch:
     def __init__(self) -> None:
         self.added: list[str] = []
+        self.removed: list[str] = []
 
     @property
     def bus(self) -> None:
@@ -80,6 +81,9 @@ class FakeOrch:
 
     async def add(self, client: Any, *, tier: Any = None) -> None:
         self.added.append(getattr(client, "account_id", "x"))
+
+    async def remove(self, account_id: str) -> None:
+        self.removed.append(account_id)
 
     async def get(self, account_id: str) -> FakeClient:
         return FakeClient()

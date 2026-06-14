@@ -13,9 +13,11 @@ from collections.abc import AsyncIterator
 
 from gateway.features.auth.errors import AccountForbidden
 from gateway.features.auth.schemas.dtos import (
+    AccountInfo,
     CreateAccountRequest,
     GenerateKeyRequest,
     RevokeKeyRequest,
+    UpdateAccountCookiesRequest,
 )
 from gateway.features.auth.services.account_service import resolve_tier
 from gateway.features.chats.schemas.dtos import CreateChatRequest, SendToChatRequest
@@ -127,7 +129,11 @@ class GatewayHandlers:
     async def system_account_create(self, ctx: RequestContext) -> JsonResult:
         req = CreateAccountRequest.model_validate(ctx.json_body)
         account = await self._c.account_service.provision(
-            req.cookies, org_uuid=req.org_uuid, name=req.name, tier=resolve_tier(req.tier)
+            req.cookies,
+            org_uuid=req.org_uuid,
+            name=req.name,
+            tier=resolve_tier(req.tier),
+            user_agent=req.user_agent,
         )
         return JsonResult(200, {"account_id": account.account_id})
 
@@ -136,6 +142,13 @@ class GatewayHandlers:
             limit=_limit(ctx), cursor=ctx.query.get("cursor")
         )
         return JsonResult(200, page)
+
+    async def system_account_update(self, ctx: RequestContext) -> JsonResult:
+        req = UpdateAccountCookiesRequest.model_validate(ctx.json_body)
+        account = await self._c.account_service.update_cookies(
+            ctx.path_params["id"], req.cookies, user_agent=req.user_agent
+        )
+        return JsonResult(200, AccountInfo.of(account))
 
     async def system_key_generate(self, ctx: RequestContext) -> JsonResult:
         req = GenerateKeyRequest.model_validate(ctx.json_body)

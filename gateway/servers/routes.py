@@ -27,6 +27,9 @@ ROUTES: list[RouteDef] = [
     # System / admin
     RouteDef("POST", "/system/accounts/create", "system_account_create", RouteAuth.ADMIN),
     RouteDef("GET", "/system/accounts/list", "system_account_list", RouteAuth.ADMIN),
+    RouteDef(
+        "PATCH", "/system/accounts/{id}/cookies", "system_account_update", RouteAuth.ADMIN
+    ),
     RouteDef("POST", "/system/keys/generate", "system_key_generate", RouteAuth.ADMIN),
     RouteDef("GET", "/system/keys/list", "system_key_list", RouteAuth.ADMIN),
     RouteDef("POST", "/system/keys/revoke", "system_key_revoke", RouteAuth.ADMIN),

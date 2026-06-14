@@ -10,6 +10,8 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
 
+from gateway.features.auth.cipher import CookieCipher
+from gateway.features.auth.errors import CookieDecryptError
 from gateway.features.auth.schemas.dtos import Account, ApiKey
 from gateway.features.auth.store.base import BaseAccountStore, BaseApiKeyStore
 from gateway.features.auth.store.models import AccountRow, ApiKeyRow
@@ -27,23 +29,34 @@ class _ApiKeyRepo(BaseRepo[ApiKeyRow]):
 
 
 class PostgresAccountStore(BaseAccountStore):
-    def __init__(self, db: Database) -> None:
+    def __init__(self, db: Database, *, cipher: CookieCipher | None = None) -> None:
         self._repo = _AccountRepo(db)
+        self._cipher = cipher
 
-    @staticmethod
-    def _row(account: Account) -> AccountRow:
+    def _row(self, account: Account) -> AccountRow:
+        data = account.model_dump(mode="json")
+        if self._cipher is not None:  # dict -> Fernet str token at rest
+            data["cookies"] = self._cipher.encrypt(account.cookies)
         return AccountRow(
             id=account.account_id,
-            data=account.model_dump(mode="json"),
+            data=data,
             tier=int(account.tier),
             revoked=account.revoked,
             created_at=account.created_at,
             updated_at=account.updated_at,
         )
 
-    @staticmethod
-    def _dto(row: AccountRow) -> Account:
-        return Account.model_validate(row.data)
+    def _dto(self, row: AccountRow) -> Account:
+        data = row.data
+        # A str cookies field is an encrypted token; a dict is legacy plaintext that
+        # predates the key and passes straight through (re-saving migrates it).
+        if isinstance(data.get("cookies"), str):
+            if self._cipher is None:
+                raise CookieDecryptError(
+                    "cookies are encrypted at rest but no COOKIE_ENCRYPTION_KEY is set"
+                )
+            data = {**data, "cookies": self._cipher.decrypt(data["cookies"])}
+        return Account.model_validate(data)
 
     async def upsert(self, account: Account) -> None:
         await self._repo.upsert(self._row(account))

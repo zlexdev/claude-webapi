@@ -45,6 +45,7 @@ class ApiKeyService(BaseService):
                 org_uuid=req.org_uuid,
                 name=req.name,
                 tier=resolve_tier(req.tier),
+                user_agent=req.user_agent,
             )
             account_id = account.account_id
         elif req.account_id:

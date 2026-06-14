@@ -165,11 +165,37 @@ Or the raw endpoint it wraps:
 ```bash
 curl -X POST localhost:8081/system/keys/generate \
   -H "X-Admin-Token: $CLAUDE_GATEWAY_ADMIN_TOKEN" \
-  -d '{"cookies": {"sessionKey": "sk-ant-sid01-...", "cf_clearance": "...", "__cf_bm": "...", "_cfuvid": "..."}, "org_uuid": "...", "name": "cli"}'
+  -d '{"cookies": {"sessionKey": "sk-ant-sid01-...", "cf_clearance": "...", "__cf_bm": "...", "_cfuvid": "..."}, "org_uuid": "...", "name": "cli", "user_agent": "Mozilla/5.0 ... Chrome/148.0.0.0 ..."}'
 # -> { "key": "sk-...", "info": { ... } }   (the key is shown once)
 ```
 
-> **Cloudflare:** include the full cookie jar (`cf_clearance` + `__cf_bm` + `_cfuvid`, not just `sessionKey`) and run the gateway with `CLAUDE_AI_USER_AGENT` matching the browser those cookies came from — otherwise org-scoped calls return `403 cf-mitigated: challenge`. The cookies are short-lived; re-provision when they expire.
+**Lifecycle: provision → use → refresh.** An account must exist *before* a key can serve
+traffic — the OpenAI client only ever sends `Authorization: Bearer sk-...`; the cookies
+live server-side and are attached when the key resolves to its account. So the order is
+always: (1) provision the account (`/system/accounts/create`, or the one-shot
+`/system/keys/generate` with `cookies`), then (2) use the returned key.
+
+> **Cloudflare:** include the full cookie jar (`cf_clearance` + `__cf_bm` + `_cfuvid`, not just `sessionKey`) and provide a `user_agent` matching the browser those cookies came from — otherwise org-scoped calls return `403 cf-mitigated: challenge`. The cookies are short-lived; refresh them (below) when they expire.
+
+> **Per-account User-Agent.** `cf_clearance` is bound to `(egress IP, User-Agent)`. The per-account `user_agent` field lets one gateway pool jars captured under different browsers; omit it to fall back to the process-global `CLAUDE_AI_USER_AGENT` (default Chrome 148).
+
+> **Cookies at rest.** Set `CLAUDE_GATEWAY_COOKIE_ENCRYPTION_KEY` to a urlsafe-base64 Fernet key (`python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`) to Fernet-encrypt every jar in the Postgres `data` column. Unset → plaintext JSON. Jars stored before a key was set keep loading and migrate to ciphertext the next time the account is saved.
+
+### Refresh cookies (no re-provision)
+
+`cf_clearance` / `__cf_bm` expire in hours. Refresh a live account's CF session in place
+instead of minting a new account + key — the pooled client is rebuilt with the new jar
+immediately, keeping the same `account_id` and existing keys:
+
+```bash
+curl -X PATCH localhost:8081/system/accounts/acc_<id>/cookies \
+  -H "X-Admin-Token: $CLAUDE_GATEWAY_ADMIN_TOKEN" \
+  -d '{"cookies": {"sessionKey": "...", "cf_clearance": "...", "__cf_bm": "...", "_cfuvid": "..."}, "user_agent": "Mozilla/5.0 ..."}'
+# -> { "account_id": "acc_<id>", "user_agent": "...", ... }   (cookies are never echoed back)
+```
+
+`user_agent` is optional on refresh (omit to keep the stored one). Re-provision a fresh
+account only when the jar is unrecoverable.
 
 ### Smoke test (end-to-end, live)
 

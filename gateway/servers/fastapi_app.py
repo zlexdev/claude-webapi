@@ -52,7 +52,7 @@ def create_fastapi_app(container: AppContainer) -> Any:
     def register(route: Any) -> None:
         async def endpoint(request: Request) -> Any:
             json_body: dict[str, Any] = {}
-            if route.http == "POST":
+            if route.http in ("POST", "PATCH", "PUT"):
                 try:
                     json_body = await request.json()
                 except Exception:  # noqa: BLE001 - empty/invalid body becomes {}
