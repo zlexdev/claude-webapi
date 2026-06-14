@@ -1,5 +1,7 @@
 # claude-webapi
 
+**English** · [Русский](README.ru.md)
+
 Async Python SDK + multi-account orchestrator for the **claude.ai** web app,
 reverse-engineered from captured traffic. Streams real SSE completions, tracks
 rate-limit windows, and fans bulk/batch work across a pool of accounts. Typed
