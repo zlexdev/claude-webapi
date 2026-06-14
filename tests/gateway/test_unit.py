@@ -9,6 +9,7 @@ from gateway.features.auth.errors import CookieParseError
 from gateway.features.auth.keys import KEY_PREFIX, generate_key, hash_key, verify
 from gateway.features.completion.schemas.openai import InMessage, Role
 from gateway.features.completion.services.prompt_builder import PromptBuilder
+from gateway.features.methods.errors import MethodParamsInvalid
 from gateway.features.methods.registry import MethodRegistry
 from gateway.features.methods.schemas.dtos import MethodStyle
 from gateway.features.models_map.services.model_mapper import ModelMapper
@@ -86,3 +87,24 @@ def test_method_registry_discovers_both_styles() -> None:
     assert field_specs
     method, params = registry.build_instance("ListConversations", {"limit": 3}, org_uuid="o")
     assert params is not None and params.org_uuid == "o" and params.limit == 3
+
+
+def test_build_instance_paramless_legacy_method() -> None:
+    registry = MethodRegistry()
+    method, params = registry.build_instance("GetProfile", {}, org_uuid="o")
+    assert params is None and method.__class__.__name__ == "GetProfile"
+    with pytest.raises(MethodParamsInvalid):
+        registry.build_instance("GetProfile", {"unexpected": 1})
+
+
+def test_discovery_finds_params_not_reexported_in_subpackage() -> None:
+    # GetOrganizationParams lives in the method's own module, not the subpackage __init__.
+    # Discovery must still classify it as LEGACY-with-params and inject org_uuid, otherwise
+    # it 422s as "param-less" and then crashes on build_params(None).
+    registry = MethodRegistry()
+    spec = registry.get("GetOrganization")
+    assert spec.style is MethodStyle.LEGACY
+    assert "org_uuid" in spec.param_schema.get("properties", {})
+    method, params = registry.build_instance("GetOrganization", {}, org_uuid="org-1")
+    assert params is not None and params.org_uuid == "org-1"
+    assert method.build_request("https://x", params).url.endswith("/api/organizations/org-1")

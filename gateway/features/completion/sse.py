@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import UTC, datetime
 from typing import Any
@@ -13,8 +14,11 @@ from gateway.features.completion.schemas.openai import (
     ChatCompletionResponse,
     ChunkChoice,
     OutMessage,
+    ToolCall,
+    ToolCallFunction,
     Usage,
 )
+from gateway.features.completion.services.tool_protocol import ParsedCall, mint_tool_call_id
 
 DONE = "data: [DONE]\n\n"
 
@@ -69,6 +73,62 @@ def sse_line(chunk: ChatCompletionChunk) -> str:
 
 def estimate_tokens(text: str) -> int:
     return max(0, len(text) // 4)
+
+
+def _to_tool_calls(calls: list[ParsedCall]) -> list[ToolCall]:
+    return [
+        ToolCall(
+            id=mint_tool_call_id(),
+            function=ToolCallFunction(
+                name=c.name, arguments=json.dumps(c.arguments, ensure_ascii=False)
+            ),
+        )
+        for c in calls
+    ]
+
+
+def make_tool_response(
+    *, calls: list[ParsedCall], model: str, prompt: str, output_tokens: int = 0
+) -> ChatCompletionResponse:
+    prompt_tokens = estimate_tokens(prompt)
+    return ChatCompletionResponse(
+        id=completion_id(),
+        created=now_epoch(),
+        model=model,
+        choices=[
+            ChatChoice(
+                message=OutMessage(content=None, tool_calls=_to_tool_calls(calls)),
+                finish_reason="tool_calls",
+            )
+        ],
+        usage=Usage(
+            prompt_tokens=prompt_tokens,
+            completion_tokens=output_tokens,
+            total_tokens=prompt_tokens + output_tokens,
+        ),
+    )
+
+
+def tool_calls_chunk(
+    *, id_: str, created: int, model: str, calls: list[ParsedCall]
+) -> ChatCompletionChunk:
+    delta = {
+        "tool_calls": [
+            {
+                "index": i,
+                "id": tc.id,
+                "type": "function",
+                "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+            }
+            for i, tc in enumerate(_to_tool_calls(calls))
+        ]
+    }
+    return ChatCompletionChunk(
+        id=id_,
+        created=created,
+        model=model,
+        choices=[ChunkChoice(delta=delta, finish_reason="tool_calls")],
+    )
 
 
 def make_response(

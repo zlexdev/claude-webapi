@@ -219,14 +219,30 @@ print(client.chat.completions.create(
 ).choices[0].message.content)
 ```
 
-Surfaces: `POST /v1/chat/completions` (+`stream`), `GET /v1/models`, `POST /v1/prompt`
-(`{"text": ...}`), `GET /v1/chats/list`, `GET /v1/chats/{id}/messages` (paginated),
-`POST /v1/chats/{id}/send`, `POST /v1/methods/invoke` (any SDK method),
-`GET /v1/methods/list` (auto-docs, also `gateway/METHODS.md`). Admin under `/system/*`.
+### Tool / function calling
+
+Pass an OpenAI `tools` array. A function whose name is in the native registry
+(`web_search`) is proxied into claude.ai and run server-side — its result folds into
+the answer text. Any other function is prompt-emulated: the gateway returns
+`finish_reason="tool_calls"` for the caller to execute and feed back via a
+`role:"tool"` message. With custom tools, `stream=true` buffers and emits one
+consolidated `tool_calls` chunk.
+
+> ⚠️ **Maturity, verified live against claude.ai:** native tools (`web_search`) work.
+> Custom function-calling is **best-effort** — claude.ai's hosted model has a strong
+> system prompt about its real toolset and routinely refuses the injected
+> `<tool_call>` contract (even with `tool_choice:"required"` it often answers
+> normally, `tool_calls:null`). The gateway's parsing/mapping is correct and
+> unit-tested; the gap is model compliance. Treat custom tools as opportunistic.
+
+Surfaces: `POST /v1/chat/completions` (+`stream`, +`tools`), `GET /v1/models`,
+`POST /v1/prompt` (`{"text": ...}`), `GET /v1/chats/list`,
+`GET /v1/chats/{id}/messages` (paginated), `POST /v1/chats/{id}/send`,
+`POST /v1/methods/invoke` (any SDK method), `GET /v1/methods/list` (auto-docs, also
+`gateway/METHODS.md`). Admin under `/system/*`.
 
 Auth: `Authorization: Bearer sk-...` (one key ↔ one account). Storage: PostgreSQL via
-SQLAlchemy (`CLAUDE_GATEWAY_DB=memory` for dev/tests). Not function-calling-capable
-(text + thinking only). Ops: `make <cmd>` /
+SQLAlchemy (`CLAUDE_GATEWAY_DB=memory` for dev/tests). Ops: `make <cmd>` /
 `scripts/{install,update,run,backup,restore,rollback,provision,smoke}.sh` on POSIX,
 `scripts/{install,run,update}.bat` + `{provision,smoke}.ps1` on Windows, plus
 `Dockerfile` / `docker-compose.yml` / `deploy/claude-gateway.service`.

@@ -52,8 +52,21 @@ HandlerResult = JsonResult | StreamResult
 
 
 @dataclass(frozen=True, slots=True)
+class QueryParam:
+    name: str
+    schema_type: str = "string"  # JSON-schema primitive type
+    required: bool = False
+    description: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class RouteDef:
     http: str  # "GET" | "POST"
     path: str  # canonical, with {id} params
     handler: str  # GatewayHandlers method name
     auth: RouteAuth
+    # OpenAPI contract (docs only — runtime dispatch reads the body manually).
+    request_model: type[BaseModel] | None = None
+    response_model: type[BaseModel] | None = None
+    query: tuple[QueryParam, ...] = ()
+    summary: str | None = None

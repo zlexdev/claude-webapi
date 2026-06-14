@@ -1,8 +1,9 @@
 """OpenAI wire DTOs — the stable public contract (PUBLIC).
 
-Unknown request fields (``tools``, ``functions``, ``tool_choice``, ``temperature`` …) are
-tolerated and ignored (D10): we accept them so SDKs don't break, but only text +
-thinking flow through. Response/chunk shapes match the ``openai`` Python SDK.
+Text + thinking flow through; ``tools``/``tool_choice`` are honoured (native
+claude.ai tools are passed through, custom functions are emulated — see
+``services/tool_protocol.py``). ``temperature`` and other unknown fields are still
+accepted-and-ignored. Response/chunk shapes match the ``openai`` Python SDK.
 """
 
 from __future__ import annotations
@@ -20,11 +21,36 @@ class Role(StrEnum):
     TOOL = "tool"
 
 
+class ToolFunction(BaseModel):
+    name: str
+    description: str | None = None
+    parameters: dict[str, Any] | None = None  # JSON Schema (open by contract)
+
+
+class ToolDef(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    type: Literal["function"] = "function"
+    function: ToolFunction
+
+
+class ToolCallFunction(BaseModel):
+    name: str
+    arguments: str  # JSON string (OpenAI contract)
+
+
+class ToolCall(BaseModel):
+    id: str
+    type: Literal["function"] = "function"
+    function: ToolCallFunction
+
+
 class InMessage(BaseModel):
     model_config = ConfigDict(extra="ignore")
     role: Role
-    content: str | list[dict[str, Any]]
+    content: str | list[dict[str, Any]] | None = None  # tool/assistant turns may omit
     name: str | None = None
+    tool_call_id: str | None = None  # role:"tool" — which call this answers
+    tool_calls: list[ToolCall] | None = None  # prior assistant tool calls
 
 
 class ChatCompletionRequest(BaseModel):
@@ -34,11 +60,14 @@ class ChatCompletionRequest(BaseModel):
     stream: bool = False
     temperature: float | None = None  # accepted, ignored
     conversation_id: str | None = None  # extra: bind to an existing chat (D8)
+    tools: list[ToolDef] | None = None
+    tool_choice: str | dict[str, Any] | None = None  # auto | none | required | {function}
 
 
 class OutMessage(BaseModel):
     role: Role = Role.ASSISTANT
-    content: str
+    content: str | None = None
+    tool_calls: list[ToolCall] | None = None
 
 
 class ChatChoice(BaseModel):

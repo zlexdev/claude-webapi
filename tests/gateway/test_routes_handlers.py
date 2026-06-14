@@ -22,7 +22,7 @@ async def _new_key(handlers: GatewayHandlers, **req: Any) -> str:
     payload = {"cookies": {"sessionKey": "s"}, "name": "t", **req}
     result = await handlers.system_key_generate(RequestContext(json_body=payload))
     assert isinstance(result, JsonResult)
-    return result.body["key"]  # type: ignore[index]
+    return body(result)["key"]
 
 
 async def _principal_ctx(container: AppContainer, raw: str, **kw: Any) -> RequestContext:
